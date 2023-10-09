@@ -25,7 +25,7 @@ var (
 	pdfFiles []string
 )
 
-func cariBerkasPenunjangLab(rootDir, regpas, trxlab string) ([]string, error) {
+func cariBerkasPenunjangLab(rootDir, regpas, medrecid, trxlab string) ([]string, error) {
 	var pdfFiles []string
 
 	err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
@@ -33,7 +33,7 @@ func cariBerkasPenunjangLab(rootDir, regpas, trxlab string) ([]string, error) {
 			return err
 		}
 		if !info.IsDir() && strings.HasSuffix(info.Name(), ".pdf") {
-			if strings.Contains(info.Name(), regpas) && strings.Contains(info.Name(), trxlab) {
+			if strings.Contains(info.Name(), regpas) && strings.Contains(info.Name(), trxlab) && strings.Contains(info.Name(), medrecid) {
 				pdfFiles = append(pdfFiles, path)
 			}
 		}
@@ -67,11 +67,11 @@ func main() {
 
 	// Kodeoutlet_NoLab_CM_NoKunjungan_NoTransaksiHIS_ThnBlmTglJamCetak
 	r.Get("/lab", func(w http.ResponseWriter, r *http.Request) {
-		// medrecid := r.URL.Query().Get("medrecid")
+		medrecid := r.URL.Query().Get("medrecid")
 		regpas := r.URL.Query().Get("regpas")
 		trxlab := r.URL.Query().Get("trxlab")
 
-		pdfFiles, err := cariBerkasPenunjangLab(pdfdir, regpas, trxlab)
+		pdfFiles, err := cariBerkasPenunjangLab(pdfdir, regpas, medrecid, trxlab)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
