@@ -166,6 +166,7 @@ func downloadFileFTP(rootDir, regpas, medrecid, trxlab string) ([]string, error)
 	if err != nil {
 		return pdfFiles, err
 	}
+	defer conn.Quit()
 
 	err = conn.Login(ftp_username, ftp_password)
 	if err != nil {
@@ -181,6 +182,8 @@ func downloadFileFTP(rootDir, regpas, medrecid, trxlab string) ([]string, error)
 	if err != nil {
 		return pdfFiles, err
 	}
+	var wg sync.WaitGroup
+	wg.Add(1)
 
 	for _, entry := range entries {
 		if strings.HasSuffix(entry.Name, ".pdf") {
@@ -188,17 +191,20 @@ func downloadFileFTP(rootDir, regpas, medrecid, trxlab string) ([]string, error)
 
 				download, err := conn.Retr(entry.Name)
 				if err != nil {
+					wg.Done()
 					return pdfFiles, err
 				}
 
 				dirPenyimpananBerkasLab := ftp_download + "/" + entry.Name
 				f, err := os.Create(dirPenyimpananBerkasLab)
 				if err != nil {
+					wg.Done()
 					return pdfFiles, err
 				}
 
 				_, err = io.Copy(f, download)
 				if err != nil {
+					wg.Done()
 					return pdfFiles, err
 				}
 
@@ -209,6 +215,9 @@ func downloadFileFTP(rootDir, regpas, medrecid, trxlab string) ([]string, error)
 			}
 		}
 	}
+	wg.Done()
+
+	wg.Wait()
 
 	return pdfFiles, nil
 }
