@@ -8,7 +8,6 @@ dirpdf:  C:\pdf
 urlftp: 172.30.239.220:21
 ftp_username: ramdhan
 ftp_password: dadan123
-ftp_port:
 ftp_dirpdf: pdf
 #lokasi download
 ftp_download:  C:\pdf2

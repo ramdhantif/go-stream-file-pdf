@@ -90,7 +90,7 @@ func main() {
 		}
 	})
 
-	r.Get("/fptlab", func(w http.ResponseWriter, r *http.Request) {
+	r.Get("/ftplab", func(w http.ResponseWriter, r *http.Request) {
 
 		//parameter disini
 		medrecid := r.URL.Query().Get("medrecid")
