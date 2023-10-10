@@ -11,3 +11,8 @@ ftp_password: dadan123
 ftp_dirpdf: pdf
 #lokasi download
 ftp_download:  C:\pdf2
+
+# IP : 192.168.2.9
+# folder: wynacom_lis
+# user: wynacom
+# pass: wynacom123
