@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/jlaffaye/ftp"
 
 	"net/http"
 
@@ -25,31 +26,9 @@ var (
 	pdfFiles []string
 )
 
-func cariBerkasPenunjangLab(rootDir, regpas, medrecid, trxlab string) ([]string, error) {
-	var pdfFiles []string
-
-	err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() && strings.HasSuffix(info.Name(), ".pdf") {
-			if strings.Contains(info.Name(), regpas) && strings.Contains(info.Name(), trxlab) && strings.Contains(info.Name(), medrecid) {
-				pdfFiles = append(pdfFiles, path)
-			}
-		}
-		return nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return pdfFiles, nil
-}
-
 func main() {
 	config.Load()
-	pdfdir := config.Data.Get("dirpdf")
+	setPort := config.Data.Get("setPort")
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -67,9 +46,15 @@ func main() {
 
 	// Kodeoutlet_NoLab_CM_NoKunjungan_NoTransaksiHIS_ThnBlmTglJamCetak
 	r.Get("/lab", func(w http.ResponseWriter, r *http.Request) {
+		pdfdir := config.Data.Get("dirpdf")
+
 		medrecid := r.URL.Query().Get("medrecid")
 		regpas := r.URL.Query().Get("regpas")
 		trxlab := r.URL.Query().Get("trxlab")
+		if regpas == "" || trxlab == "" {
+			http.Error(w, "Parameter tidak lengkap.", http.StatusBadRequest)
+			return
+		}
 
 		pdfFiles, err := cariBerkasPenunjangLab(pdfdir, regpas, medrecid, trxlab)
 		if err != nil {
@@ -105,51 +90,147 @@ func main() {
 		}
 	})
 
-	http.ListenAndServe(":9690", r)
+	r.Get("/fptlab", func(w http.ResponseWriter, r *http.Request) {
 
-	// watchDirectory(pdfdir)
+		//parameter disini
+		medrecid := r.URL.Query().Get("medrecid")
+		regpas := r.URL.Query().Get("regpas")
+		trxlab := r.URL.Query().Get("trxlab")
+		ftp_download := config.Data.Get("ftp_download")
 
+		if regpas == "" || trxlab == "" {
+			http.Error(w, "Parameter tidak lengkap.", http.StatusBadRequest)
+			return
+		}
+
+		pdfFiles, err := cariBerkasPenunjangLab(ftp_download, regpas, medrecid, trxlab)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// jika tidak ada dilokal maka ambil dari ftp server
+		if len(pdfFiles) == 0 {
+			pdfFiles, err := downloadFileFTP(ftp_download, regpas, medrecid, trxlab)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			if len(pdfFiles) == 0 {
+				http.Error(w, "Tidak ada berkas PDF yang ditemukan dengan parameter yang sesuai.", http.StatusNotFound)
+				return
+			}
+
+		}
+
+		// Mengambil berkas PDF pertama yang ditemukan
+		pdfFile := pdfFiles[0]
+
+		// Membuka berkas PDF
+		file, err := os.Open(pdfFile)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer file.Close()
+
+		// Set header untuk respons HTTP
+		w.Header().Set("Content-Type", "application/pdf")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", filepath.Base(pdfFile)))
+
+		// Salin isi berkas PDF ke respons HTTP
+		_, err = io.Copy(w, file)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+	})
+
+	fmt.Println("web server running, port", setPort)
+
+	http.ListenAndServe(setPort, r)
 }
 
-// func watchDirectory(dir string) {
+func downloadFileFTP(rootDir, regpas, medrecid, trxlab string) ([]string, error) {
+	var pdfFiles []string
 
-// 	// Inisialisasi fsnotify
-// 	watcher, err := fsnotify.NewWatcher()
-// 	if err != nil {
-// 		fmt.Println("Error inisialisasi fsnotify:", err)
-// 		return
-// 	}
-// 	defer watcher.Close()
+	urlftp := config.Data.Get("urlftp")
+	ftp_username := config.Data.Get("ftp_username")
+	ftp_password := config.Data.Get("ftp_password")
+	ftp_dirpdf := config.Data.Get("ftp_dirpdf")
+	ftp_download := config.Data.Get("ftp_download")
 
-// 	// Mendaftarkan direktori untuk dipantau
-// 	err = watcher.Add(dir)
-// 	if err != nil {
-// 		fmt.Println("Error menambahkan direktori untuk dipantau:", err)
-// 		return
-// 	}
+	conn, err := ftp.Dial(urlftp)
+	if err != nil {
+		return pdfFiles, err
+	}
 
-// 	// Menjalankan goroutine untuk memantau perubahan pada direktori
-// 	go func() {
-// 		for {
-// 			select {
-// 			case event, ok := <-watcher.Events:
-// 				if !ok {
-// 					return
-// 				}
-// 				if event.Op&fsnotify.Create == fsnotify.Create {
-// 					if strings.HasSuffix(event.Name, ".pdf") {
-// 						fmt.Println("Berkas PDF baru ditambahkan:", event.Name)
-// 					}
-// 				}
-// 			case err, ok := <-watcher.Errors:
-// 				if !ok {
-// 					return
-// 				}
-// 				fmt.Println("Error fsnotify:", err)
-// 			}
-// 		}
-// 	}()
+	err = conn.Login(ftp_username, ftp_password)
+	if err != nil {
+		return pdfFiles, err
+	}
 
-// 	// Menahan aplikasi agar tetap berjalan
-// 	select {}
-// }
+	err = conn.ChangeDir(ftp_dirpdf)
+	if err != nil {
+		return pdfFiles, err
+	}
+
+	entries, err := conn.List(".")
+	if err != nil {
+		return pdfFiles, err
+	}
+
+	for _, entry := range entries {
+		if strings.HasSuffix(entry.Name, ".pdf") {
+			if strings.Contains(entry.Name, regpas) && strings.Contains(entry.Name, trxlab) && strings.Contains(entry.Name, medrecid) {
+
+				download, err := conn.Retr(entry.Name)
+				if err != nil {
+					return pdfFiles, err
+				}
+
+				dirPenyimpananBerkasLab := ftp_download + "/" + entry.Name
+				f, err := os.Create(dirPenyimpananBerkasLab)
+				if err != nil {
+					return pdfFiles, err
+				}
+
+				_, err = io.Copy(f, download)
+				if err != nil {
+					return pdfFiles, err
+				}
+
+				download.Close()
+				f.Close()
+
+				pdfFiles = append(pdfFiles, dirPenyimpananBerkasLab)
+			}
+		}
+	}
+
+	return pdfFiles, nil
+}
+
+func cariBerkasPenunjangLab(rootDir, regpas, medrecid, trxlab string) ([]string, error) {
+	var pdfFiles []string
+
+	err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() && strings.HasSuffix(info.Name(), ".pdf") {
+			if strings.Contains(info.Name(), regpas) && strings.Contains(info.Name(), trxlab) && strings.Contains(info.Name(), medrecid) {
+				pdfFiles = append(pdfFiles, path)
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return pdfFiles, nil
+}

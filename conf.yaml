@@ -1,1 +1,14 @@
+
+setPort: :3003
+
+#config directory pdf jika bisa di instal pada server utama lab
 dirpdf:  C:\pdf
+
+#jika menggunakan ftp
+urlftp: 172.30.239.220:21
+ftp_username: ramdhan
+ftp_password: dadan123
+ftp_port:
+ftp_dirpdf: pdf
+#lokasi download
+ftp_download:  C:\pdf2
