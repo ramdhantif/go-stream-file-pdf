@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
 	"sync"
 
 	"fmt"
@@ -69,7 +68,7 @@ func main() {
 		}
 
 		// Mengambil berkas PDF pertama yang ditemukan
-		pdfFile := pdfFiles[0]
+		pdfFile := pdfFiles[len(pdfFiles)-1]
 
 		// Membuka berkas PDF
 		file, err := os.Open(pdfFile)
@@ -183,10 +182,6 @@ func downloadFileFTP(rootDir, regpas, medrecid, trxlab string) ([]string, error)
 	if err != nil {
 		return pdfFiles, err
 	}
-
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].Name > entries[j].Name
-	})
 
 	var wg sync.WaitGroup
 	wg.Add(1)
